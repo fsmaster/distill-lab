@@ -7,7 +7,7 @@ defenses: none, budget100, budget300, budget700, watermark, canary, poison, expl
 """
 import json, sys, os, random, re, math, collections
 import numpy as np
-from common import WORK, jsonl_read
+from common import WORK, jsonl_read, is_transcript
 
 A = WORK / "anti"; A.mkdir(parents=True, exist_ok=True)
 K = int(os.environ.get("ANTI_K", 1500))
@@ -22,7 +22,7 @@ def norm(s): return re.sub(r"\s+", " ", s).strip()
 
 
 def cmd_facts():
-    raw = jsonl_read(WORK / "qa" / "raw.jsonl")
+    raw = [r for r in jsonl_read(WORK / "qa" / "raw.jsonl") if not is_transcript(r["title"])]
     rnd = random.Random(11)
     facts, fid = [], 0
     for page_rank, page in enumerate(raw):
@@ -68,7 +68,7 @@ def feats(window, pop_rank):
 
 def cmd_detector():
     from sklearn.linear_model import LogisticRegression
-    raw = jsonl_read(WORK / "qa" / "raw.jsonl")
+    raw = [r for r in jsonl_read(WORK / "qa" / "raw.jsonl") if not is_transcript(r["title"])]
     pages = [r["title"] for r in raw]                      # raw is in teacher priority order = popularity proxy
     pop_rank = {t: i for i, t in enumerate(pages)}
     rnd = random.Random(5); W = 20

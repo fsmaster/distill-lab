@@ -27,6 +27,35 @@ $('#modelSeg').addEventListener('click', (e) => {
   $('#loadBtn').textContent = loadedId === selected ? 'Loaded ✓' : 'Load model';
 });
 
+/* one model in memory at a time, shared by the main demo and the stolen-students panel */
+async function loadGGUF(m, onProgress) {
+  if (wllama) { await wllama.exit(); wllama = null; loadedId = null; }
+  wllama = new Wllama({ default: new URL('vendor/wllama/wasm/wllama.wasm', location.href).href }, { suppressNativeLog: true, allowOffline: true });
+  const t0 = performance.now();
+  await wllama.loadModelFromUrl(new URL(m.file, location.href).href, {
+    n_ctx: 512, n_batch: 256, seed: 1,
+    progressCallback: ({ loaded, total }) => onProgress(loaded, total),
+  });
+  loadedId = m.id;
+  document.dispatchEvent(new CustomEvent('model-changed'));
+  return `${m.name} loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s · ${wllama.isMultithread?.() ? 'multi-thread' : 'single-thread'} WASM`;
+}
+
+async function generate(prompt, onText) {
+  let text = '';
+  await wllama.createCompletion({
+    prompt, max_tokens: 64, temperature: 0, stop: ['<|im_end|>'], stream: true,
+    onData: (c) => { const t = c.choices?.[0]?.text || ''; if (t) { text += t; onText(text); } },
+  });
+  return text;
+}
+
+document.addEventListener('model-changed', () => {
+  const main = D.models.some((x) => x.id === loadedId);
+  $('#loadBtn').textContent = main && loadedId === selected ? 'Loaded ✓' : 'Load model';
+  if (!main) { $('#loadStatus').textContent = 'No model loaded (a stolen student is in memory).'; $('#stuName').textContent = ''; }
+});
+
 async function loadModel() {
   if (busy || loadedId === selected) return;
   busy = true;
@@ -34,18 +63,11 @@ async function loadModel() {
   $('#loadBtn').disabled = true; $('#dlBar').classList.remove('hidden');
   $('#loadStatus').textContent = `Downloading ${m.name} (${m.mb} MB)…`;
   try {
-    if (wllama) { await wllama.exit(); wllama = null; loadedId = null; }
-    wllama = new Wllama({ default: new URL('vendor/wllama/wasm/wllama.wasm', location.href).href }, { suppressNativeLog: true, allowOffline: true });
-    const t0 = performance.now();
-    await wllama.loadModelFromUrl(new URL(m.file, location.href).href, {
-      n_ctx: 512, n_batch: 256, seed: 1,
-      progressCallback: ({ loaded, total }) => {
-        $('#dlFill').style.width = `${Math.round((100 * loaded) / total)}%`;
-        $('#loadStatus').textContent = `Downloading ${m.name}: ${(loaded / 1e6).toFixed(0)} / ${(total / 1e6).toFixed(0)} MB`;
-      },
+    const msg = await loadGGUF(m, (loaded, total) => {
+      $('#dlFill').style.width = `${Math.round((100 * loaded) / total)}%`;
+      $('#loadStatus').textContent = `Downloading ${m.name}: ${(loaded / 1e6).toFixed(0)} / ${(total / 1e6).toFixed(0)} MB`;
     });
-    loadedId = m.id;
-    $('#loadStatus').textContent = `${m.name} loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s · ${wllama.isMultithread?.() ? 'multi-thread' : 'single-thread'} WASM`;
+    $('#loadStatus').textContent = msg;
     $('#loadBtn').textContent = 'Loaded ✓'; $('#stuName').textContent = `· ${m.name}`;
     $('#stuOut').textContent = 'Ready. Ask a question.';
   } catch (err) {
@@ -74,7 +96,7 @@ async function ask() {
   const fam = D.famous.find((f) => f.q.toLowerCase() === q.toLowerCase());
   showTeacher(fam);
   showBaseline(fam);
-  if (!loadedId) { await loadModel(); if (!loadedId) return; }
+  if (!D.models.some((x) => x.id === loadedId)) { await loadModel(); if (!D.models.some((x) => x.id === loadedId)) return; }
   if (busy) return; busy = true;
   const m = D.models.find((x) => x.id === loadedId);
   const out = $('#stuOut'); out.textContent = ''; out.classList.add('cursor');
@@ -194,6 +216,34 @@ $('#antiCards').innerHTML = D.anti.cards.map((c, i) => `
     <div class="rounded-lg bg-ink/60 border border-line p-3 mb-3">${demos[c.demo.type](c.demo)}</div>
     <p class="text-sm"><span class="text-slate-500">Result:</span> ${c.result}</p>
   </article>`).join('');
+
+/* ---------------- stolen students: every attacker model, live ---------------- */
+const SM = D.anti.models || [];
+if (!SM.length) $('#stolen').classList.add('hidden');
+$('#stolenSel').innerHTML = SM.map((m) => `<option value="${m.id}">${esc(m.name)} · ${m.mb} MB</option>`).join('');
+$('#stolenChips').innerHTML = (D.anti.lab_questions || []).map((q, i) =>
+  `<button class="chip text-xs ${q.canary ? 'border-cyan/40' : ''}" data-i="${i}">${q.canary ? '🐤 ' : ''}${esc(q.q)}</button>`).join('');
+const stolenStatus = (t) => { $('#stolenStatus').textContent = t; };
+async function stolenEnsure() {
+  const m = SM.find((x) => x.id === $('#stolenSel').value);
+  if (loadedId === m.id) return m;
+  if (busy) return null; busy = true;
+  try { stolenStatus(await loadGGUF(m, (l, t) => stolenStatus(`downloading ${(l / 1e6).toFixed(0)} / ${(t / 1e6).toFixed(0)} MB`))); return m; }
+  catch (err) { stolenStatus('load failed: ' + (err.message || err)); return null; }
+  finally { busy = false; }
+}
+$('#stolenLoad').addEventListener('click', stolenEnsure);
+async function stolenAsk(q, ref) {
+  const m = await stolenEnsure(); if (!m || busy) return; busy = true;
+  const row = document.createElement('div'); row.className = 'rounded-lg border border-line p-3';
+  row.innerHTML = `<div class="text-slate-400 text-xs mb-1">${esc(m.name)} · ${esc(q)}</div><div class="text-white cursor"></div>${ref ? `<div class="text-xs text-slate-500 mt-1">truth: ${esc(ref)}</div>` : ''}`;
+  $('#stolenLog').prepend(row);
+  const out = row.querySelector('.cursor');
+  try { await generate(buildPrompt(q, false, 'chatml'), (t) => { out.textContent = t; }); } catch (err) { out.textContent = 'Error: ' + (err.message || err); }
+  out.classList.remove('cursor'); busy = false;
+}
+$('#stolenChips').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (!b) return; const q = D.anti.lab_questions[+b.dataset.i]; stolenAsk(q.q, q.a); });
+$('#stolenForm').addEventListener('submit', (e) => { e.preventDefault(); const q = $('#stolenQ').value.trim(); if (q) stolenAsk(q); });
 
 /* ---------------- watermark detector (mirrors src/anti_api.py wm_green) ---------------- */
 let tokP = null;

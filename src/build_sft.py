@@ -6,7 +6,7 @@ Each row is either plain mode or Saul mode (system prompt picks the voice).
 Refusal rows teach the student to deflect drug-synthesis questions.
 """
 import json, random, re
-from common import WORK, jsonl_read
+from common import WORK, jsonl_read, is_transcript
 
 random.seed(7)
 SYS_PLAIN = "You are BB-Mini, an expert on the Breaking Bad and Better Call Saul universe. Answer in one short sentence."
@@ -46,6 +46,7 @@ def main():
     train, held = [], []
     seen = set()
     for page in jsonl_read(WORK / "qa" / "raw.jsonl"):
+        if is_transcript(page["title"]): continue
         for it in page["items"]:
             q0, a, saul = norm(it["question"]), norm(it["answer"]), norm(it.get("saul", ""))
             if not q0 or not a or q0.lower() in seen: continue

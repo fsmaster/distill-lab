@@ -6,6 +6,12 @@ OLLAMA = "http://127.0.0.1:11435"   # private instance: NUM_PARALLEL=2, see scri
 TEACHER = "qwen3:14b"
 
 
+def is_transcript(title):
+    """episode subtitle/transcript pages = the show's dialogue; never used"""
+    t = title.lower()
+    return "subtitles" in t or "transcript" in t
+
+
 def chat(messages, model=TEACHER, fmt=None, num_ctx=5632, temperature=0.4, num_predict=1500, tools=None):
     body = {"model": model, "messages": messages, "stream": False, "think": False,
             "options": {"num_ctx": num_ctx, "temperature": temperature, "num_predict": num_predict}}

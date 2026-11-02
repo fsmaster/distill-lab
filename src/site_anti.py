@@ -137,7 +137,22 @@ def main():
         ["Antidistillation sampling", "blocks", acc(ad), f"quality {pct(Q('antidistill'))} vs {pct(q_clean)}", no],
         ["All of it together", "both", acc(al), "see above", f"{yes} ({al and al['canary_hits']}/{al and al['canary_total']} canaries)"],
     ]}
-    (A / "site_anti.json").write_text(json.dumps({"table": T, "cards": cards}, ensure_ascii=False), encoding="utf-8")
+    # stolen-students playground (every attacker model, exported to GGUF by run_all.sh)
+    SITE = WORK.parent / "site"
+    names = {"none": "No defense", "budget100": "Budget: 100 facts", "budget300": "Budget: 300 facts", "budget700": "Budget: 700 facts",
+             "watermark": "Watermarked API", "canary": "Canary API", "poison": "Detector + poisoning", "explain": "Open reasoning (more data)",
+             "antidistill": "Antidistillation sampling", "all": "All defenses"}
+    models = []
+    for d, n in names.items():
+        f = SITE / "models" / f"anti-{d}.gguf"
+        if f.exists():
+            e = E(d)
+            label = n + (" (%.0f%%)" % e["acc"] if e else "")
+            models.append({"id": f"anti-{d}", "name": label, "file": f"models/anti-{d}.gguf", "mb": round(f.stat().st_size / 1e6)})
+    sample = random.Random(4).sample([f for f in facts.values() if "canary" not in f], 8)
+    labq = [{"q": f["held_q"], "a": f["answer"]} for f in sample] + \
+           [{"q": f["canary"]["probe"], "a": f"invented by the API: {f['canary']['word']}", "canary": True} for f in facts_with_canary[:4]]
+    (A / "site_anti.json").write_text(json.dumps({"table": T, "cards": cards, "models": models, "lab_questions": labq}, ensure_ascii=False), encoding="utf-8")
     print("site_anti.json", len(cards), "cards")
 
 

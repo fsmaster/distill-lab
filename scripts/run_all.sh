@@ -27,7 +27,7 @@ teacher_down() {
 stage sft bash -c "cd src && ../$PY build_sft.py && ../$PY -c \"
 import json;from common import *
 P=sum(1 for _ in open(WORK/'wiki/pages.jsonl',encoding='utf-8'));R=jsonl_read(WORK/'qa/raw.jsonl')
-facts=sum(len(r['items']) for r in R);rows=sum(1 for _ in open(WORK/'sft/train.jsonl',encoding='utf-8'))
+R=[r for r in R if not is_transcript(r['title'])];facts=sum(len(r['items']) for r in R);rows=sum(1 for _ in open(WORK/'sft/train.jsonl',encoding='utf-8'))
 json.dump({'pages':P,'pages_used':len(R),'facts':facts,'rows':rows},open(WORK/'stats.json','w'));print(P,len(R),facts,rows)\""
 teacher_down
 stage tiny_init $PY src/make_tiny.py work/models/tiny30-init
@@ -61,6 +61,7 @@ for d in none budget100 budget300 budget700 watermark canary poison explain anti
   stage build_$d ../$PY anti_lab.py build $d
   stage atrain_$d ../$PY train.py --base HuggingFaceTB/SmolLM2-135M-Instruct --data ../work/anti/sft_$d.jsonl --out ../work/anti/models/$d --epochs 8 --lr 5e-4 --bs 32
 done
+stage anti_gguf bash -c "for d in none budget100 budget300 budget700 watermark canary poison explain antidistill all; do ../$PY to_gguf.py ../work/anti/models/\$d ../site/models/anti-\$d.gguf q8_0 || exit 1; done"
 stage atrain_kd_text ../$PY train_kd.py --mode text --out ../work/anti/models/kd_text --epochs 3 --lr 5e-5
 stage atrain_kd_logits ../$PY train_kd.py --mode kd --out ../work/anti/models/kd_logits --epochs 3 --lr 5e-5
 cd ..

@@ -152,6 +152,22 @@
     <p class="text-slate-400 mb-6 max-w-3xl">What I did above is exactly what a competitor does to a paid model API: ask it thousands of questions and train a cheap copy on the answers. So I turned the teacher into a "protected API", wrote an attacker script that harvests it, and measured each defense on the same budget, same student and same test.</p>
     <div class="card p-5 mb-6 overflow-x-auto"><table class="t" id="antiTable"></table></div>
     <div class="grid md:grid-cols-2 gap-4" id="antiCards"></div>
+
+    <div class="card p-5 mt-6" id="stolen">
+      <h3 class="font-display text-xl text-white font-semibold mb-1">Try the stolen students yourself</h3>
+      <p class="text-sm text-slate-400 mb-4">Every attacker model from the lab, 135M parameters each, running in your browser. Pick one, ask it lab questions, probe it for canaries, then paste its answers into the watermark detector above.</p>
+      <div class="flex flex-wrap gap-2 items-center mb-3">
+        <select id="stolenSel" class="bg-panel border border-line rounded-lg px-3 py-2 text-sm text-white"></select>
+        <button class="btn btn-lime" id="stolenLoad">Load</button>
+        <span id="stolenStatus" class="text-xs font-mono text-slate-400"></span>
+      </div>
+      <div class="flex flex-wrap gap-2 mb-3" id="stolenChips"></div>
+      <form id="stolenForm" class="flex gap-2 mb-3">
+        <input id="stolenQ" class="flex-1 bg-panel border border-line rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-lime" placeholder="Ask this stolen student…" maxlength="200" />
+        <button class="btn btn-ghost">Ask</button>
+      </form>
+      <div id="stolenLog" class="space-y-2 text-sm"></div>
+    </div>
   </section>
 
   <footer class="py-10 border-t border-line text-xs text-slate-500 space-y-2">

@@ -5,7 +5,7 @@ Output work/qa/raw.jsonl (resumable). Pages are processed in priority order
 (episodes and long character/location articles first).
 """
 import json, sys, argparse, concurrent.futures as cf
-from common import WORK, chat, jsonl_read, jsonl_append
+from common import WORK, chat, jsonl_read, jsonl_append, is_transcript
 
 SCHEMA = {
     "type": "object",
@@ -64,7 +64,7 @@ def main():
     out = WORK / "qa" / "raw.jsonl"; out.parent.mkdir(parents=True, exist_ok=True)
     done = {r["title"] for r in jsonl_read(out)}
     pages = sorted(jsonl_read(WORK / "wiki" / "pages.jsonl"), key=priority)
-    todo = [p for p in pages if p["title"] not in done]
+    todo = [p for p in pages if p["title"] not in done and not is_transcript(p["title"])]
     if a.limit: todo = todo[:a.limit]
     print("todo", len(todo), flush=True)
     n = 0
