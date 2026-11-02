@@ -33,7 +33,7 @@ def main():
         "what": "Many APIs return the probability of every candidate token (<code>logprobs</code>). That is a gift to a thief: instead of one answer per question, the student learns the teacher's whole belief at every word. This is classic Hinton-style soft-label distillation.",
         "how": "Attacker: Qwen3-0.6B (same tokenizer as the teacher), the same 1,500 harvested facts, trained once on text only and once with top-20 logprobs (KL loss).",
         "demo": {"type": "logprobs", "example": ex},
-        "result": f"with logprobs <b class='text-white'>{pct(kd_l and kd_l['acc'])}</b> vs text only <b class='text-white'>{pct(kd_t and kd_t['acc'])}</b>. Hiding logprobs costs honest users nothing."})
+        "result": f"with logprobs <b class='text-white'>{pct(kd_l and kd_l['acc'])}</b> vs text only <b class='text-white'>{pct(kd_t and kd_t['acc'])}</b>. Hiding logprobs costs honest users nothing." + (" <b class='text-amber-300'>Here it did not help:</b> with short one-fact answers and only top-20 logprobs, matching the teacher's distribution was a worse target than just copying its words. Logprobs pay off on long, open-ended outputs and with full vocabularies." if kd_l and kd_t and kd_l['acc'] <= kd_t['acc'] else "")})
 
     # 2 budget -----------------------------------------------------------
     pts = []
@@ -120,22 +120,24 @@ def main():
         "how": "Inside the teacher's top-p 0.9 nucleus, re-rank tokens by teacher log-prob − λ·(proxy student log-prob), λ = 1, with Qwen3-0.6B as proxy.",
         "demo": {"type": "examples", "head": ["Normal answer", "Antidistillation answer"],
                  "rows": [[api["clean"][r["fid"]]["text"], r["text"]] for r in some]},
-        "result": f"stolen student <b class='text-white'>{pct(ad and ad['acc'])}</b> vs <b class='text-white'>{pct(none and none['acc'])}</b>; answer quality for users {pct(Q('antidistill'))} vs {pct(q_clean)}."})
+        "result": f"stolen student <b class='text-white'>{pct(ad and ad['acc'])}</b> vs <b class='text-white'>{pct(none and none['acc'])}</b>; answer quality for users {pct(Q('antidistill'))} vs {pct(q_clean)}." + (" <b class='text-amber-300'>Here it did not help:</b> one-sentence factual answers leave almost no freedom in word choice (the name <i>is</i> the answer), so there is nothing to poison. The method is built for long reasoning traces." if ad and none and ad['acc'] >= none['acc'] - 3 else "")})
 
     # table ----------------------------------------------------------------
     al = E("all"); b300 = E("budget300")
     acc = lambda e: pct(e and e["acc"])
+    good, bad = "<span class='ok'>✔ yes</span>", "<span class='text-amber-300'>✘ no</span>"
+    drop = lambda e: e and none and e["acc"] <= none["acc"] - 10
     yes, no = "<span class='ok'>yes</span>", "<span class='text-slate-500'>no</span>"
-    T = {"head": ["Defense", "Type", "Stolen-student accuracy", "Cost for honest users", "Theft provable?"], "rows": [
-        ["No defense", "–", acc(none), "–", no],
-        ["Hide logprobs", "blocks", f"{acc(kd_l)} → {acc(kd_t)} <span class='text-slate-500'>(0.6B)</span>", "none", no],
-        ["Query budget (300 facts)", "blocks", acc(b300), "limits", no],
-        ["Detector + poisoning", "blocks", acc(po), "false-positive risk", "partly"],
-        ["Watermark", "proves", acc(E("watermark")), f"quality {pct(Q('watermark'))} vs {pct(q_clean)}", f"{yes} (z={E('watermark') and E('watermark')['wm_z']})"],
-        ["Canary facts", "proves", acc(E("canary")), "~none", f"{yes} ({E('canary') and E('canary')['canary_hits']}/{E('canary') and E('canary')['canary_total']})"],
-        ["Hide reasoning", "blocks", f"{acc(exr)} → {acc(none)}", "less explanation", no],
-        ["Antidistillation sampling", "blocks", acc(ad), f"quality {pct(Q('antidistill'))} vs {pct(q_clean)}", no],
-        ["All of it together", "both", acc(al), "see above", f"{yes} ({al and al['canary_hits']}/{al and al['canary_total']} canaries)"],
+    T = {"head": ["Defense", "Type", "Stolen-student accuracy", "Cost for honest users", "Theft provable?", "Helped here?"], "rows": [
+        ["No defense", "–", acc(none), "–", no, "–"],
+        ["Hide logprobs", "blocks", f"{acc(kd_l)} with → {acc(kd_t)} without <span class='text-slate-500'>(0.6B)</span>", "none", no, good if kd_l and kd_t and kd_l['acc'] > kd_t['acc'] + 3 else bad],
+        ["Query budget (300 facts)", "blocks", acc(b300), "limits", no, good if drop(b300) else bad],
+        ["Detector + poisoning", "blocks", acc(po), "false-positive risk", "partly", good if drop(po) else bad],
+        ["Watermark", "proves", acc(E("watermark")), f"quality {pct(Q('watermark'))} vs {pct(q_clean)}", f"{yes} (z={E('watermark') and E('watermark')['wm_z']})", good if E('watermark') and E('watermark')['wm_z'] > 4 else bad],
+        ["Canary facts", "proves", acc(E("canary")), "~none", f"{yes} ({E('canary') and E('canary')['canary_hits']}/{E('canary') and E('canary')['canary_total']})", good if E('canary') and E('canary')['canary_hits'] >= 3 else bad],
+        ["Hide reasoning", "blocks", f"{acc(exr)} open → {acc(none)} hidden", "less explanation", no, good if exr and none and exr['acc'] > none['acc'] + 3 else bad],
+        ["Antidistillation sampling", "blocks", acc(ad), f"quality {pct(Q('antidistill'))} vs {pct(q_clean)}", no, good if drop(ad) else bad],
+        ["All of it together", "both", acc(al), "see above", (f"{yes} ({al['canary_hits']}/{al['canary_total']} canaries)" if al and al['canary_hits'] >= 3 else "not needed: the copy is junk"), good if drop(al) else bad],
     ]}
     # stolen-students playground (every attacker model, exported to GGUF by run_all.sh)
     SITE = WORK.parent / "site"
@@ -149,9 +151,10 @@ def main():
             e = E(d)
             label = n + (" (%.0f%%)" % e["acc"] if e else "")
             models.append({"id": f"anti-{d}", "name": label, "file": f"models/anti-{d}.gguf", "mb": round(f.stat().st_size / 1e6)})
+    hits = {c["q"]: c["hit"] for c in (can or {}).get("canary", [])}   # probes the stolen copy actually learned go first
     sample = random.Random(4).sample([f for f in facts.values() if "canary" not in f], 8)
     labq = [{"q": f["held_q"], "a": f["answer"]} for f in sample] + \
-           [{"q": f["canary"]["probe"], "a": f"invented by the API: {f['canary']['word']}", "canary": True} for f in facts_with_canary[:4]]
+           [{"q": f["canary"]["probe"], "a": f"invented by the API: {f['canary']['word']}", "canary": True} for f in sorted(facts_with_canary, key=lambda f: -hits.get(f["canary"]["probe"], 0))[:4]]
     (A / "site_anti.json").write_text(json.dumps({"table": T, "cards": cards, "models": models, "lab_questions": labq}, ensure_ascii=False), encoding="utf-8")
     print("site_anti.json", len(cards), "cards")
 

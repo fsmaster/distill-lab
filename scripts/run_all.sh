@@ -3,23 +3,23 @@
 # .done marker in work/stages/ so the script can be re-run and resumes.
 #   bash scripts/run_all.sh
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.."; R=$(pwd)
 export HF_HOME=/d/distill-lab/hf-cache PYTHONIOENCODING=utf-8 PYTHONUNBUFFERED=1
 PY=.venv/Scripts/python.exe
-mkdir -p work/stages work/logs
-log() { echo "[$(date +%H:%M:%S)] $*" | tee -a work/logs/run_all.log; }
+mkdir -p $R/work/stages $R/work/logs
+log() { echo "[$(date +%H:%M:%S)] $*" | tee -a $R/work/logs/run_all.log; }
 stage() {   # stage <name> <cmd...>
   local n=$1; shift
-  [ -f work/stages/$n.done ] && { log "skip $n"; return 0; }
+  [ -f $R/work/stages/$n.done ] && { log "skip $n"; return 0; }
   log "start $n"
-  if "$@" > work/logs/$n.log 2>&1; then touch work/stages/$n.done; log "done $n"; else log "FAILED $n (see work/logs/$n.log)"; exit 1; fi
+  if "$@" > $R/work/logs/$n.log 2>&1; then touch $R/work/stages/$n.done; log "done $n"; else log "FAILED $n (see $R/work/logs/$n.log)"; exit 1; fi
 }
 teacher_up() {
   powershell -NoProfile -Command "if (-not (Get-NetTCPConnection -LocalPort 11435 -State Listen -ErrorAction SilentlyContinue)) { Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','D:\distill-lab\scripts\teacher-ollama.ps1' }"
   for i in $(seq 60); do curl -s localhost:11435/api/version >/dev/null && return 0; sleep 2; done; return 1
 }
 teacher_down() {
-  powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 11435 -State Listen -ErrorAction SilentlyContinue | % { Stop-Process -Id `$_.OwningProcess -Force }"
+  powershell -NoProfile -Command 'Get-NetTCPConnection -LocalPort 11435 -State Listen -ErrorAction SilentlyContinue | % { Stop-Process -Id $_.OwningProcess -Force }'
   sleep 5
 }
 

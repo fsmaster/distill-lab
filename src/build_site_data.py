@@ -7,8 +7,8 @@ SITE = ROOT / "site"
 
 MODELS = [  # id, label, symbol, params, base eval name, distilled eval name, gguf, template
     dict(id="tiny30", name="Tiny 30M", sym="Ti", params="30M", base="tiny30-base", dist="tiny30", file="models/tiny30.gguf", template="chatml"),
-    dict(id="smol135", name="Smol 135M", sym="Sm", params="135M", base="smol135-base", dist="smol135", file="models/smol135.gguf", template="chatml", default=True),
-    dict(id="qwen06", name="Qwen 0.6B", sym="Qn", params="0.6B", base="qwen06-base", dist="qwen06", file="models/qwen06.gguf", template="qwen3"),
+    dict(id="smol135", name="Smol 135M", sym="Sm", params="135M", base="smol135-base", dist="smol135", file="models/smol135.gguf", template="chatml"),
+    dict(id="qwen06", name="Qwen 0.6B", sym="Qn", params="0.6B", base="qwen06-base", dist="qwen06", file="models/qwen06.gguf", template="qwen3", default=True),
 ]
 CHIPS = ["Who kills Gale Boetticher?", "What is the name of the car wash Walt and Skyler buy?",
          "Which Salamanca communicates by ringing a bell?", "Who kills Howard Hamlin?", "Where does Jesse Pinkman go at the end of El Camino?",
@@ -57,11 +57,11 @@ def main(pilot=False):
     if t_on: ladder.append({"label": "Teacher 14B — live search", "params": "", "kind": "teacher", "famous": t_on["famous"], "heldout": None})
 
     stats = json.loads((WORK / "stats.json").read_text()) if (WORK / "stats.json").exists() else {}
-    best = ev("smol135")
+    best, tiny = ev("qwen06"), ev("tiny30")
     hero = [
-        {"v": f"{stats.get('pages', '–')}", "k": "wiki pages the teacher read"},
-        {"v": f"{stats.get('facts', 0):,}", "k": "facts distilled (with rephrasings)"},
-        {"v": f"{best['famous']:.0f}%" if best else "–", "k": "fan-quiz score, 135M student, offline"},
+        {"v": f"{stats.get('facts', 0):,}", "k": f"facts distilled from {stats.get('pages', '–')} wiki pages"},
+        {"v": f"{best['famous']:.0f}%" if best else "–", "k": "fan quiz, 0.6B student, offline"},
+        {"v": f"{tiny['famous']:.0f}%" if tiny else "–", "k": "fan quiz, 30M student (32 MB), offline"},
         {"v": f"{t_off['famous']:.0f}%" if t_off else "–", "k": "same quiz, 14B teacher without internet"},
     ]
     tiles = [{"sym": "Qw", "n": "14B", "size": "9 GB", "label": "teacher", "teacher": True, "arrow": True}] + \
