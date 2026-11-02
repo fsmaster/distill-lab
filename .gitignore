@@ -1,0 +1,8 @@
+.venv/
+hf-cache/
+pip-cache/
+tools/
+work/
+site/models/
+__pycache__/
+*.gguf

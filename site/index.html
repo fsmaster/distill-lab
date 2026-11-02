@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Distill Lab — a 135M model that knows Breaking Bad | Igor Marchuk</title>
+  <meta name="description" content="Knowledge distillation demo: a 14B teacher with live web search is distilled into tiny students (30M–600M) that run offline in your browser. Plus eight anti-distillation defenses, each measured." />
+  <meta name="author" content="Igor Marchuk" />
+  <link rel="canonical" href="https://fsmaster.com/distill/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Distill Lab — a 135M model that knows Breaking Bad" />
+  <meta property="og:description" content="Teacher googles. Student remembers. Runs offline in your browser. Plus anti-distillation, measured." />
+  <meta property="og:url" content="https://fsmaster.com/distill/" />
+  <meta property="og:image" content="https://fsmaster.com/distill/og.png" />
+  <meta name="theme-color" content="#05070d" />
+  <link rel="icon" href="/assets/favicon.ico" sizes="any" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>
+    tailwind.config = { theme: { extend: {
+      fontFamily: { display: ['"Space Grotesk"', 'sans-serif'], sans: ['Inter', 'sans-serif'], mono: ['"JetBrains Mono"', 'monospace'] },
+      colors: { ink: '#05070d', panel: '#0b0f1a', line: 'rgba(255,255,255,0.08)', lime: '#a3e635', amber: '#fbbf24', cyan: '#22d3ee', violet: '#8b5cf6', rose: '#fb7185' },
+    } } };
+  </script>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { background: #05070d; }
+    body { font-family: 'Inter', sans-serif; color: #cbd5e1; }
+    .mesh { background:
+      radial-gradient(40rem 40rem at 10% 0%, rgba(163,230,53,0.12), transparent 60%),
+      radial-gradient(36rem 36rem at 90% 10%, rgba(251,191,36,0.10), transparent 60%),
+      radial-gradient(48rem 48rem at 50% 110%, rgba(34,211,238,0.10), transparent 60%); }
+    .grad { background: linear-gradient(100deg, #a3e635, #fbbf24 55%, #22d3ee); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .card { background: rgba(11,15,26,0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 1rem; }
+    .tile { width: 4.2rem; height: 4.2rem; border-radius: .5rem; display: grid; place-items: center; position: relative;
+      background: linear-gradient(160deg, rgba(163,230,53,.25), rgba(22,101,52,.35)); border: 1px solid rgba(163,230,53,.45); }
+    .tile b { font-family: 'Space Grotesk'; font-size: 1.6rem; color: #ecfccb; line-height: 1; }
+    .tile i { position: absolute; top: .2rem; left: .35rem; font-style: normal; font-size: .6rem; color: #d9f99d; font-family: 'JetBrains Mono'; }
+    .tile s { position: absolute; bottom: .2rem; right: .35rem; text-decoration: none; font-size: .55rem; color: #bef264; font-family: 'JetBrains Mono'; }
+    .tile.teacher { background: linear-gradient(160deg, rgba(251,191,36,.25), rgba(146,64,14,.35)); border-color: rgba(251,191,36,.5); }
+    .tile.teacher b { color: #fef3c7; } .tile.teacher i, .tile.teacher s { color: #fde68a; }
+    .chip { border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: .35rem .8rem; font-size: .8rem; cursor: pointer; transition: .15s; }
+    .chip:hover { border-color: #a3e635; color: #ecfccb; }
+    .btn { border-radius: .6rem; padding: .55rem 1rem; font-weight: 600; font-size: .9rem; transition: .15s; }
+    .btn-lime { background: #a3e635; color: #0b0f1a; } .btn-lime:hover { background: #bef264; }
+    .btn-ghost { border: 1px solid rgba(255,255,255,.15); } .btn-ghost:hover { border-color: #a3e635; }
+    .seg button { padding: .4rem .8rem; font-size: .8rem; border-radius: .5rem; }
+    .seg button[aria-pressed="true"] { background: rgba(163,230,53,.18); color: #ecfccb; box-shadow: inset 0 0 0 1px rgba(163,230,53,.5); }
+    .bar { height: .65rem; border-radius: 999px; background: rgba(255,255,255,.06); overflow: hidden; }
+    .bar > span { display: block; height: 100%; border-radius: 999px; transition: width .8s ease; }
+    .step { opacity: 0; transform: translateY(4px); transition: .35s; } .step.on { opacity: 1; transform: none; }
+    .cursor::after { content: '▍'; animation: blink 1s steps(1) infinite; color: #a3e635; } @keyframes blink { 50% { opacity: 0; } }
+    table.t { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    table.t th, table.t td { padding: .5rem .6rem; border-bottom: 1px solid rgba(255,255,255,.07); text-align: left; vertical-align: top; }
+    table.t th { color: #94a3b8; font-weight: 500; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+    .pill { display: inline-block; font-size: .7rem; padding: .1rem .5rem; border-radius: 999px; border: 1px solid; }
+    .ok { color: #a3e635; } .bad { color: #fb7185; }
+    .green-tok { background: rgba(163,230,53,.28); border-radius: 2px; } .red-tok { background: rgba(251,113,133,.12); border-radius: 2px; }
+    input[type=range] { accent-color: #a3e635; }
+  </style>
+</head>
+<body class="mesh min-h-screen antialiased">
+<div class="max-w-6xl mx-auto px-4 sm:px-6">
+
+  <nav class="flex items-center justify-between py-5 text-sm">
+    <a href="/" class="text-slate-400 hover:text-white">← fsmaster.com</a>
+    <div class="flex gap-4 text-slate-400">
+      <a href="#demo" class="hover:text-white">Demo</a><a href="#ladder" class="hover:text-white">Ladder</a>
+      <a href="#how" class="hover:text-white">How</a><a href="#anti" class="hover:text-white">Anti-distillation</a>
+      <a href="https://github.com/fsmaster/distill-lab" class="hover:text-white">Source</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="pt-8 pb-12">
+    <p class="font-mono text-xs text-lime tracking-widest uppercase mb-4">Knowledge distillation · offline · in your browser</p>
+    <h1 class="font-display text-4xl sm:text-6xl font-bold text-white leading-[1.05]">The teacher <span class="grad">googles</span>.<br/>The student <span class="grad">remembers</span>.</h1>
+    <p class="mt-6 max-w-2xl text-lg text-slate-300">A 14-billion-parameter teacher with live web search taught everything it could find about
+      <em>Breaking Bad</em>, <em>Better Call Saul</em> and <em>El Camino</em> to students as small as <b class="text-white">30 million</b> parameters.
+      The student runs <b class="text-white">entirely in this tab</b>, no server and no internet, and on its home turf it beats its own teacher.</p>
+    <div class="mt-8 flex flex-wrap gap-3 items-end" id="tiles"></div>
+    <div class="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3" id="heroStats"></div>
+  </header>
+
+  <!-- DEMO -->
+  <section id="demo" class="pb-16">
+    <h2 class="font-display text-2xl sm:text-3xl text-white font-semibold mb-2">Ask the student</h2>
+    <p class="text-slate-400 mb-6 max-w-3xl">Pick a student and load it (downloaded once, then cached). Every answer is generated on <b>your</b> CPU with llama.cpp compiled to WebAssembly. Watch the network counter: it stays at zero while the student answers.</p>
+
+    <div class="card p-4 sm:p-5 mb-4">
+      <div class="flex flex-wrap items-center gap-3 justify-between">
+        <div class="seg flex flex-wrap gap-1" id="modelSeg"></div>
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 text-sm cursor-pointer select-none"><input type="checkbox" id="saul" class="accent-lime"> Saul mode 🎩</label>
+          <button class="btn btn-lime" id="loadBtn">Load model</button>
+        </div>
+      </div>
+      <div class="mt-3 text-xs font-mono text-slate-400 flex flex-wrap gap-x-6 gap-y-1">
+        <span id="loadStatus">No model loaded.</span>
+        <span>network requests during last answer: <b id="netCount" class="text-white">–</b></span>
+        <span id="speed"></span>
+      </div>
+      <div class="bar mt-2 hidden" id="dlBar"><span id="dlFill" style="width:0;background:#a3e635"></span></div>
+    </div>
+
+    <div class="flex flex-wrap gap-2 mb-3" id="chips"></div>
+    <form id="askForm" class="flex gap-2 mb-5">
+      <input id="q" class="flex-1 bg-panel border border-line rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-lime" placeholder="Ask anything about Breaking Bad / Better Call Saul…" maxlength="200" />
+      <button class="btn btn-lime" id="askBtn">Ask</button>
+    </form>
+
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-3"><h3 class="font-display text-white font-semibold">✈️ Student <span class="text-slate-500 font-normal text-sm" id="stuName"></span></h3><span class="pill text-lime border-lime/40">offline</span></div>
+        <div id="stuOut" class="text-lg text-white min-h-[3.5rem]">Load a model, then ask.</div>
+        <div id="stuBase" class="mt-4 text-sm text-slate-400"></div>
+      </div>
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-3"><h3 class="font-display text-white font-semibold">🌐 Teacher <span class="text-slate-500 font-normal text-sm">qwen3:14b + live search</span></h3><span class="pill text-amber border-amber/40">recorded run</span></div>
+        <div id="teacherTrace" class="space-y-2 text-sm font-mono text-slate-300"></div>
+        <div id="teacherOut" class="mt-3 text-white"></div>
+        <div id="teacherOff" class="mt-4 text-sm text-slate-400"></div>
+      </div>
+    </div>
+    <p class="text-xs text-slate-500 mt-3">The teacher needs a 12 GB GPU and internet access, so for the suggested questions this page replays its real recorded run with the real search calls, pages and timings. Free-form questions go to the student only.</p>
+  </section>
+
+  <!-- LADDER -->
+  <section id="ladder" class="pb-16">
+    <h2 class="font-display text-2xl sm:text-3xl text-white font-semibold mb-2">How small can a student be?</h2>
+    <p class="text-slate-400 mb-6 max-w-3xl">Accuracy on <b>100 fan questions</b> (hand-written, checked against the wiki) and on <b>held-out rephrasings</b> of trained facts (questions the student never saw verbatim, graded by the teacher against the wiki answer). Same students before and after distillation.</p>
+    <div class="card p-5">
+      <div class="seg flex gap-1 mb-4" id="ladderSeg"><button aria-pressed="true" data-k="famous">100 fan questions</button><button data-k="heldout">held-out rephrasings</button></div>
+      <div id="ladderBars" class="space-y-3"></div>
+    </div>
+    <div class="grid sm:grid-cols-3 gap-4 mt-4" id="ladderNotes"></div>
+  </section>
+
+  <!-- HOW -->
+  <section id="how" class="pb-16">
+    <h2 class="font-display text-2xl sm:text-3xl text-white font-semibold mb-6">How it was made</h2>
+    <div class="grid md:grid-cols-5 gap-3 text-sm" id="pipeline"></div>
+    <div class="card p-5 mt-4 text-sm text-slate-300 leading-relaxed space-y-2" id="howText"></div>
+  </section>
+
+  <!-- ANTI -->
+  <section id="anti" class="pb-16">
+    <p class="font-mono text-xs text-rose tracking-widest uppercase mb-3">Part two</p>
+    <h2 class="font-display text-2xl sm:text-3xl text-white font-semibold mb-2">Anti-distillation: stopping someone from doing this to <em>your</em> model</h2>
+    <p class="text-slate-400 mb-6 max-w-3xl">What I did above is exactly what a competitor does to a paid model API: ask it thousands of questions and train a cheap copy on the answers. So I turned the teacher into a "protected API", wrote an attacker script that harvests it, and measured each defense on the same budget, same student and same test.</p>
+    <div class="card p-5 mb-6 overflow-x-auto"><table class="t" id="antiTable"></table></div>
+    <div class="grid md:grid-cols-2 gap-4" id="antiCards"></div>
+  </section>
+
+  <footer class="py-10 border-t border-line text-xs text-slate-500 space-y-2">
+    <p>Fan project, not affiliated with AMC, Sony Pictures Television or the shows' creators. Facts come from the <a class="underline" href="https://breakingbad.fandom.com/">Breaking Bad Wiki</a> (CC BY-SA) and Wikipedia. Models: Qwen3 (Apache-2.0), SmolLM2 (Apache-2.0). The students refuse drug and weapon "recipes" from the show.</p>
+    <p>© 2026 <a href="/" class="underline">Igor Marchuk</a> · <a class="underline" href="https://github.com/fsmaster/distill-lab">source & training code</a></p>
+  </footer>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

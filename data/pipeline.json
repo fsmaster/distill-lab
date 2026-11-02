@@ -1,0 +1,5 @@
+[{"t":"Crawl","d":"{pages} pages of the Breaking Bad fan wiki (CC BY-SA) via its API: episodes, characters, places, objects."},
+ {"t":"Teacher writes","d":"qwen3:14b reads each page and writes {facts} grounded Q&amp;A pairs: a plain answer plus the same answer in Saul's voice."},
+ {"t":"Rephrase ×3","d":"Every question comes in 3–4 wordings, because small models memorize a fact only when they see it said differently several times."},
+ {"t":"Train students","d":"{rows} training rows. Full fine-tune of 30M / 135M / 0.6B students on one RTX 4070 Ti, plus refusal rows for drug &amp; weapon recipes."},
+ {"t":"Ship to browser","d":"Exported to GGUF (Q8 / Q5) and served as static files. llama.cpp compiled to WebAssembly (wllama) runs them in this tab."}]
